@@ -57956,13 +57956,15 @@ class GolangJsonParser {
 ;// CONCATENATED MODULE: ./lib/parsers/java-junit/java-stack-trace-element-parser.js
 // classloader and module name are optional:
 // at <CLASSLOADER>/<MODULE_NAME_AND_VERSION>/<FULLY_QUALIFIED_METHOD_NAME>(<FILE_NAME>:<LINE_NUMBER>)
+// at <CLASSLOADER>//<FULLY_QUALIFIED_METHOD_NAME>(<FILE_NAME>:<LINE_NUMBER>)
+// at <MODULE_NAME>/<FULLY_QUALIFIED_METHOD_NAME>(<FILE_NAME>:<LINE_NUMBER>)
 // https://github.com/eclipse-openj9/openj9/issues/11452#issuecomment-754946992
-const re = /^\s*at (\S+\/\S*\/)?(.*)\((.*):(\d+)\)$/;
+const re = /^\s*at (.*)\((.*):(\d+)\)$/;
 function parseStackTraceElement(stackTraceLine) {
     const match = stackTraceLine.match(re);
     if (match !== null) {
-        const [_, maybeClassLoaderAndModuleNameAndVersion, tracePath, fileName, lineStr] = match;
-        const { classLoader, moduleNameAndVersion } = parseClassLoaderAndModule(maybeClassLoaderAndModuleNameAndVersion);
+        const [, beforeParen, fileName, lineStr] = match;
+        const { classLoader, moduleNameAndVersion, tracePath } = parseClassLoaderModuleAndTracePath(beforeParen);
         return {
             classLoader,
             moduleNameAndVersion,
@@ -57973,17 +57975,35 @@ function parseStackTraceElement(stackTraceLine) {
     }
     return undefined;
 }
-function parseClassLoaderAndModule(maybeClassLoaderAndModuleNameAndVersion) {
-    if (maybeClassLoaderAndModuleNameAndVersion) {
-        const res = maybeClassLoaderAndModuleNameAndVersion.split('/');
-        const classLoader = res[0];
-        let moduleNameAndVersion = res[1];
-        if (moduleNameAndVersion === '') {
-            moduleNameAndVersion = undefined;
-        }
-        return { classLoader, moduleNameAndVersion };
+function parseClassLoaderModuleAndTracePath(beforeParen) {
+    const slashIndex = beforeParen.indexOf('/');
+    if (slashIndex === -1) {
+        return { tracePath: beforeParen };
     }
-    return { classLoader: undefined, moduleNameAndVersion: undefined };
+    const firstSegment = beforeParen.substring(0, slashIndex);
+    const afterFirstSlash = beforeParen.substring(slashIndex + 1);
+    // classloader//method
+    if (afterFirstSlash.startsWith('/')) {
+        return {
+            classLoader: firstSegment,
+            tracePath: afterFirstSlash.substring(1)
+        };
+    }
+    const secondSlashIndex = afterFirstSlash.indexOf('/');
+    if (secondSlashIndex !== -1) {
+        const secondSegment = afterFirstSlash.substring(0, secondSlashIndex);
+        const tracePath = afterFirstSlash.substring(secondSlashIndex + 1);
+        return {
+            classLoader: firstSegment,
+            moduleNameAndVersion: secondSegment,
+            tracePath
+        };
+    }
+    // module/method (e.g. java.base/java.lang.Thread.getStackTrace)
+    return {
+        moduleNameAndVersion: firstSegment,
+        tracePath: afterFirstSlash
+    };
 }
 
 ;// CONCATENATED MODULE: ./lib/parsers/java-junit/java-junit-parser.js
@@ -58141,13 +58161,15 @@ class JavaJunitParser {
         if (files === undefined) {
             return undefined;
         }
-        // Remove class name and method name from trace.
-        // Take parts until first item with capital letter - package names are lowercase while class name is CamelCase.
-        const packageParts = tracePath.split(/\./g);
-        const packageIndex = packageParts.findIndex(part => part[0] <= 'Z');
-        if (packageIndex !== -1) {
-            packageParts.splice(packageIndex, packageParts.length - packageIndex);
+        // Remove class name and method name from trace path.
+        // tracePath format: com.package.ClassName.methodName
+        const traceParts = tracePath.split(/\./g);
+        if (traceParts.length < 2) {
+            return undefined;
         }
+        traceParts.pop(); // method name
+        traceParts.pop(); // class name (may include $ for inner classes)
+        const packageParts = traceParts;
         if (packageParts.length === 0) {
             return undefined;
         }

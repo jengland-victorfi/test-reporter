@@ -8,14 +8,16 @@ export interface StackTraceElement {
 
 // classloader and module name are optional:
 // at <CLASSLOADER>/<MODULE_NAME_AND_VERSION>/<FULLY_QUALIFIED_METHOD_NAME>(<FILE_NAME>:<LINE_NUMBER>)
+// at <CLASSLOADER>//<FULLY_QUALIFIED_METHOD_NAME>(<FILE_NAME>:<LINE_NUMBER>)
+// at <MODULE_NAME>/<FULLY_QUALIFIED_METHOD_NAME>(<FILE_NAME>:<LINE_NUMBER>)
 // https://github.com/eclipse-openj9/openj9/issues/11452#issuecomment-754946992
-const re = /^\s*at (\S+\/\S*\/)?(.*)\((.*):(\d+)\)$/
+const re = /^\s*at (.*)\((.*):(\d+)\)$/
 
 export function parseStackTraceElement(stackTraceLine: string): StackTraceElement | undefined {
   const match = stackTraceLine.match(re)
   if (match !== null) {
-    const [_, maybeClassLoaderAndModuleNameAndVersion, tracePath, fileName, lineStr] = match
-    const {classLoader, moduleNameAndVersion} = parseClassLoaderAndModule(maybeClassLoaderAndModuleNameAndVersion)
+    const [, beforeParen, fileName, lineStr] = match
+    const {classLoader, moduleNameAndVersion, tracePath} = parseClassLoaderModuleAndTracePath(beforeParen)
     return {
       classLoader,
       moduleNameAndVersion,
@@ -27,18 +29,41 @@ export function parseStackTraceElement(stackTraceLine: string): StackTraceElemen
   return undefined
 }
 
-function parseClassLoaderAndModule(maybeClassLoaderAndModuleNameAndVersion?: string): {
+function parseClassLoaderModuleAndTracePath(beforeParen: string): {
   classLoader?: string
   moduleNameAndVersion?: string
+  tracePath: string
 } {
-  if (maybeClassLoaderAndModuleNameAndVersion) {
-    const res = maybeClassLoaderAndModuleNameAndVersion.split('/')
-    const classLoader = res[0]
-    let moduleNameAndVersion: string | undefined = res[1]
-    if (moduleNameAndVersion === '') {
-      moduleNameAndVersion = undefined
-    }
-    return {classLoader, moduleNameAndVersion}
+  const slashIndex = beforeParen.indexOf('/')
+  if (slashIndex === -1) {
+    return {tracePath: beforeParen}
   }
-  return {classLoader: undefined, moduleNameAndVersion: undefined}
+
+  const firstSegment = beforeParen.substring(0, slashIndex)
+  const afterFirstSlash = beforeParen.substring(slashIndex + 1)
+
+  // classloader//method
+  if (afterFirstSlash.startsWith('/')) {
+    return {
+      classLoader: firstSegment,
+      tracePath: afterFirstSlash.substring(1)
+    }
+  }
+
+  const secondSlashIndex = afterFirstSlash.indexOf('/')
+  if (secondSlashIndex !== -1) {
+    const secondSegment = afterFirstSlash.substring(0, secondSlashIndex)
+    const tracePath = afterFirstSlash.substring(secondSlashIndex + 1)
+    return {
+      classLoader: firstSegment,
+      moduleNameAndVersion: secondSegment,
+      tracePath
+    }
+  }
+
+  // module/method (e.g. java.base/java.lang.Thread.getStackTrace)
+  return {
+    moduleNameAndVersion: firstSegment,
+    tracePath: afterFirstSlash
+  }
 }

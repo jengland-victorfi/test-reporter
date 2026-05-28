@@ -4,6 +4,7 @@ import * as path from 'path'
 import {JavaJunitParser} from '../src/parsers/java-junit/java-junit-parser.js'
 import {ParseOptions} from '../src/test-parser.js'
 import {DEFAULT_OPTIONS, getReport} from '../src/report/get-report.js'
+import {getAnnotations} from '../src/report/get-annotations.js'
 import {normalizeFilePath} from '../src/utils/path-utils.js'
 
 import {fileURLToPath} from 'url'
@@ -196,5 +197,59 @@ describe('java-junit tests', () => {
     })
     // Report should have the title as the first line
     expect(report).toMatch(/^# My Custom Title\n/)
+  })
+
+  it('resolves source file path in multi-module Maven projects', async () => {
+    const fixturePath = path.join(__dirname, 'fixtures', 'external', 'java', 'multi-module-failure.xml')
+    const filePath = normalizeFilePath(path.relative(__dirname, fixturePath))
+    const fileContent = fs.readFileSync(fixturePath, {encoding: 'utf8'})
+    const trackedFiles = [
+      'core/common/src/test/java/com/sgcib/cops/common/utils/MaturityUtilsUnitTest.java'
+    ]
+
+    const parser = new JavaJunitParser({parseErrors: true, trackedFiles})
+    const result = await parser.parse(filePath, fileContent)
+    const failedTest = result.suites[0].groups[0].tests[0]
+
+    expect(failedTest.result).toBe('failed')
+    expect(failedTest.error?.path).toBe(
+      'core/common/src/test/java/com/sgcib/cops/common/utils/MaturityUtilsUnitTest.java'
+    )
+    expect(failedTest.error?.line).toBe(21)
+
+    const annotations = getAnnotations([result], 10)
+    expect(annotations).toHaveLength(1)
+    expect(annotations[0].path).toBe(
+      'core/common/src/test/java/com/sgcib/cops/common/utils/MaturityUtilsUnitTest.java'
+    )
+    expect(annotations[0].start_line).toBe(21)
+  })
+
+  it('resolves source file path when package name contains uppercase letters', async () => {
+    const fixturePath = path.join(__dirname, 'fixtures', 'external', 'java', 'uppercase-package-failure.xml')
+    const filePath = normalizeFilePath(path.relative(__dirname, fixturePath))
+    const fileContent = fs.readFileSync(fixturePath, {encoding: 'utf8'})
+    const trackedFiles = ['module-a/src/test/java/com/MyCompany/utils/ExampleTest.java']
+
+    const parser = new JavaJunitParser({parseErrors: true, trackedFiles})
+    const result = await parser.parse(filePath, fileContent)
+    const failedTest = result.suites[0].groups[0].tests[0]
+
+    expect(failedTest.error?.path).toBe('module-a/src/test/java/com/MyCompany/utils/ExampleTest.java')
+    expect(failedTest.error?.line).toBe(15)
+  })
+
+  it('resolves source file path when stack trace contains Java 9 module prefix', async () => {
+    const fixturePath = path.join(__dirname, 'fixtures', 'external', 'java', 'module-prefix-failure.xml')
+    const filePath = normalizeFilePath(path.relative(__dirname, fixturePath))
+    const fileContent = fs.readFileSync(fixturePath, {encoding: 'utf8'})
+    const trackedFiles = ['service-app/src/test/java/com/example/MyClassTest.java']
+
+    const parser = new JavaJunitParser({parseErrors: true, trackedFiles})
+    const result = await parser.parse(filePath, fileContent)
+    const failedTest = result.suites[0].groups[0].tests[0]
+
+    expect(failedTest.error?.path).toBe('service-app/src/test/java/com/example/MyClassTest.java')
+    expect(failedTest.error?.line).toBe(10)
   })
 })

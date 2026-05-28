@@ -59,6 +59,17 @@ describe('parseStackTraceLine tests', () => {
           lineStr: '101'
         })
       })
+
+      it('with module only', async () => {
+        const line = 'at java.base/java.lang.Thread.getStackTrace(Thread.java:1606)'
+        expect(parseStackTraceElement(line)).toEqual({
+          classLoader: undefined,
+          moduleNameAndVersion: 'java.base',
+          tracePath: 'java.lang.Thread.getStackTrace',
+          fileName: 'Thread.java',
+          lineStr: '1606'
+        })
+      })
     })
   })
 

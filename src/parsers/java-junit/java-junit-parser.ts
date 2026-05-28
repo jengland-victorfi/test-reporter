@@ -179,13 +179,16 @@ export class JavaJunitParser implements TestParser {
       return undefined
     }
 
-    // Remove class name and method name from trace.
-    // Take parts until first item with capital letter - package names are lowercase while class name is CamelCase.
-    const packageParts = tracePath.split(/\./g)
-    const packageIndex = packageParts.findIndex(part => part[0] <= 'Z')
-    if (packageIndex !== -1) {
-      packageParts.splice(packageIndex, packageParts.length - packageIndex)
+    // Remove class name and method name from trace path.
+    // tracePath format: com.package.ClassName.methodName
+    const traceParts = tracePath.split(/\./g)
+    if (traceParts.length < 2) {
+      return undefined
     }
+
+    traceParts.pop() // method name
+    traceParts.pop() // class name (may include $ for inner classes)
+    const packageParts = traceParts
 
     if (packageParts.length === 0) {
       return undefined

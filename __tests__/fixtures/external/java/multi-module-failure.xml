@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.sgcib.cops.common.utils.MaturityUtilsUnitTest" tests="1" failures="1" time="0.01">
+  <testcase name="testtemporaryfailure" classname="com.sgcib.cops.common.utils.MaturityUtilsUnitTest" time="0.01">
+    <failure message="expected true but was false"><![CDATA[java.lang.AssertionError: expected true but was false
+at com.sgcib.cops.common.utils.MaturityUtilsUnitTest.testtemporaryfailure(MaturityUtilsUnitTest.java:21)
+]]></failure>
+  </testcase>
+</testsuite>
