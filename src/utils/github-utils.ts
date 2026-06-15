@@ -8,7 +8,7 @@ import type {PullRequest, WorkflowRunEvent} from '@octokit/webhooks-types'
 
 export function getCheckRunContext(): {sha: string; runId: number} {
   if (github.context.eventName === 'workflow_run') {
-    core.info('Action was triggered by workflow_run: using SHA and RUN_ID from triggering workflow')
+    core.info('Action was triggered by workflow_run: using SHA and RUN_ID from triggering workflow: JUSTIN WAS HERE')
     const event = github.context.payload as WorkflowRunEvent
     if (!event.workflow_run) {
       throw new Error("Event of type 'workflow_run' is missing 'workflow_run' field")
